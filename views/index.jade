@@ -1,0 +1,22 @@
+extends layout
+
+block content
+  canvas(id='whiteboard', width=800, height=600, style="border:1px solid black")
+
+  script
+    $(function() {
+      var wb = new WhiteBoard($('#whiteboard'), function(points) {
+        socket.emit('draw', {points: points, color: color });
+      });
+
+      var color = wb.randomColor();
+
+      var socket = io.connect(window.location.protocol + '//' + window.location.hostname + ':' + window.location.port)
+      socket.on('draw', function(data) {
+        wb.drawLine(data.points, data.color);
+      });
+
+      socket.on('clear', function(data) {
+        wb.clear();
+      });
+    });
