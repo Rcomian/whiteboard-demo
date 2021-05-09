@@ -1,87 +1,40 @@
+const createError = require('http-errors')
+const express = require('express')
+const path = require('path')
+const cookieParser = require('cookie-parser')
+const logger = require('morgan')
 
-/**
- * Module dependencies.
- */
+const indexRouter = require('./routes/index')
 
-var express = require('express')
-  , routes = require('./routes')
-  , http = require('http')
-  , path = require('path')
-  , socketio = require('socket.io');
+const app = express()
 
-var app = express();
+// view engine setup
+app.set('views', path.join(__dirname, 'views'))
+app.set('view engine', 'pug')
 
-app.configure(function(){
-  app.set('port', process.env.PORT || 3000);
-  app.set('views', __dirname + '/views');
-  app.set('view engine', 'jade');
-  app.use(express.favicon());
-  app.use(express.logger('dev'));
-  app.use(express.bodyParser());
-  app.use(express.methodOverride());
-  app.use(app.router);
-  app.use(express.static(path.join(__dirname, 'public')));
-});
+app.use(logger('dev'))
+app.use(express.json())
+app.use(express.urlencoded({ extended: false }))
+app.use(cookieParser())
+app.use(express.static(path.join(__dirname, 'public')))
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules')))
 
-app.configure('development', function(){
-  app.use(express.errorHandler());
-});
+app.use('/', indexRouter)
 
-app.get('/', routes.index);
+// catch 404 and forward to error handler
+app.use(function(req, res, next) {
+  next(createError(404))
+})
 
-var server = http.createServer(app);
+// error handler
+app.use(function(err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message
+  res.locals.error = req.app.get('env') === 'development' ? err : {}
 
-var io = socketio.listen(server);
+  // render the error page
+  res.status(err.status || 500)
+  res.render('error')
+})
 
-server.listen(app.get('port'), function(){
-  console.log("Express server listening on port " + app.get('port'));
-});
-
-var history = [];
-
-io.sockets.on('connection', function(socket) {
-  function emitHistory(points) {
-    if (points && points.length) {
-      socket.emit('draw', points.shift());
-      process.nextTick(function() {
-        emitHistory(points);
-      })
-    }
-  };
-
-  socket.emit('clear', {});
-  socket.emit('draw', {points: [{x: 10, y: 10}, {x: 100, y: 10}], color: [128, 128, 128]});
-
-  emitHistory(history.slice(-history.length));
-
-  socket.on('draw', function (data) {
-    history.push(data);
-    history = history.slice(-1000);
-    io.sockets.emit('draw', data);
-  });
-});
-
-var net = require('net');
-var repl = require('repl');
-
-
-net.createServer(function (socket) {
-  var r = repl.start({
-    prompt: "node via TCP socket> ",
-    input: socket,
-    output: socket,
-  });
-
-  r.on('exit', function() {
-    socket.end();
-  });
-
-  r.context.$ = {
-    io: io,
-    app: io,
-    clear: function () {
-        io.sockets.emit('clear', {});
-        history = [];
-      }
-    };
-}).listen(5001);
+module.exports = app
